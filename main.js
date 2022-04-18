@@ -88,17 +88,26 @@ function getBandpass(startFreq, endFreq, duration, q=10) {
   return bandpass
 }
 
+function disconnect(nodes, atTime) {
+  setTimeout(() => {
+    console.log('disconnecting')
+    nodes.forEach((node) => node.disconnect())
+  }, 1000 * (atTime - ac.currentTime))
+}
+
 function playCurvedNoise(volume, startFreq, endFreq, duration, q=10) {
   const source = ac.createBufferSource()
   source.buffer = buffer
   const bandpass = getBandpass(startFreq, endFreq, duration, q)
   const envelope = ac.createGain()
+  const endTime = ac.currentTime + duration
   envelope.gain.setValueAtTime(volume, ac.currentTime)
-  envelope.gain.linearRampToValueAtTime(0, ac.currentTime + duration)
-  bandpass.connect(envelope)
-  envelope.connect(output)
+  envelope.gain.linearRampToValueAtTime(0, endTime)
 
   source.connect(bandpass)
+  bandpass.connect(envelope)
+  envelope.connect(output)
+  disconnect([source, bandpass, envelope], endTime)
   source.start()
 }
 
@@ -115,26 +124,30 @@ function getEnvelope(volume, duration, attack, decay, sustain, release) {
 function playTone(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1], [0, 0])
+  const endTime = ac.currentTime + attack + decay + duration + release
   osc.setPeriodicWave(wave)
   osc.frequency.value = startFreq
-  osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
+  osc.frequency.linearRampToValueAtTime(endFreq, endTime)
 
   const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
   osc.connect(envelope)
   envelope.connect(output)
+  disconnect([osc, envelope], endTime)
   osc.start()
 }
 
 function playOrgan(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1, 0.1, 0.55], [0, 0, 0, 0])
+  const endTime = ac.currentTime + attack + decay + duration + release
   osc.setPeriodicWave(wave)
   osc.frequency.value = startFreq
-  osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
+  osc.frequency.linearRampToValueAtTime(endFreq, endTime)
 
   const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
   osc.connect(envelope)
   envelope.connect(output)
+  disconnect([osc, envelope], endTime)
   osc.start()
 }
 
@@ -167,6 +180,7 @@ function getDistortion() {
 function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1, 1], [0, 0, 0])
+  const endTime = ac.currentTime + attack + decay + duration + release
   osc.setPeriodicWave(wave)
   osc.frequency.value = startFreq
   //osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
@@ -177,6 +191,7 @@ function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, 
   osc.connect(distortion)
   distortion.connect(envelope)
   envelope.connect(output)
+  disconnect([osc, distortion, envelope], endTime)
 
   osc.start()
 }
@@ -190,34 +205,11 @@ function updateAnimation() {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
   }
 
-//  console.log('updateAnimation')
-
-//   for (let i = 0; i < len; i++) {
-//     real[i] = (i) > pos ? 1 : 0
-//     imag[i] = (i ^ 1) < pos ? 0 : 1
-//   }
-//   pos = (pos + 1) % len
-//   const wave = ac.createPeriodicWave(real, imag)
-//   osc.setPeriodicWave(wave)
-//
-// //  osc.connect(output)
-//   osc.connect(bandpass)
-//   bandpass.connect(output)
-//
-//   output.connect(ac.destination)
-//
-//
-//   console.log('freq', osc.frequency.value)
-
-
   function drawBar(val, angle, color1, color2) {
     const rotatedAngle = angle + ac.currentTime
     const x = Math.sin(rotatedAngle)*val + halfX
     const y = Math.cos(rotatedAngle)*val + halfY
-    //ctx.fillRect(x, y, 10, 10)
     const gradient = ctx.createLinearGradient(halfX, halfY, x, y)
-    //console.log(color1)
-    //console.log(color2)
 
     gradient.addColorStop(0, color1)
     gradient.addColorStop(1, color2)
@@ -233,7 +225,6 @@ function updateAnimation() {
     gradient.addColorStop(0, color1)
     gradient.addColorStop(1, color2)
     ctx.strokeStyle = gradient
-    //ctx.moveTo(x1, y1)
     ctx.lineTo(x2, y2)
 
   }
@@ -303,12 +294,10 @@ function run() {
 
 function toggleAnimation() {
   if (animationHandle) {
-    //output.disconnect(ac.destination)
     window.cancelAnimationFrame(animationHandle)
     ctx.fillText('Paused', Math.floor(canvas.width / 2), 100)
     animationHandle = null
   } else {
-    //output.connect(ac.destination)
     animationHandle = window.requestAnimationFrame(updateAnimation)
   }
 }
@@ -410,14 +399,12 @@ document.onkeydown = function (e) {
       playCurvedNoise(2, 15000, 15000, 0.5)
       break
     case 'q':
-      //playCurvedNoise(10, 35, 35, 0.02)
       playBass(1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
       break
     case 'p':
       toggleAnimation()
       break
     case 'u':
-      //playChord(220, [0, 7, 16, 21, 26])
       playChord(220, chords[chordNum])
       chordNum = (chordNum + 1) % chords.length
       break
