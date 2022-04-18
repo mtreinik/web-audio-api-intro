@@ -9,11 +9,11 @@ const sequencer = [
   },
   {
     step: 2,
-    notes: ['', 'r'],
+    notes: ['a', ''],
   },
   {
     step: 2,
-    notes: ['a', ''],
+    notes: ['', 'r'],
   },
   {
     step: 4,
@@ -22,7 +22,11 @@ const sequencer = [
   {
     step: 1,
     notes: ['r', 'r', '', 'r', 'y', 'r', '', 'r']
-  }
+  },
+  {
+    step: 4,
+    notes: ['', 'i'],
+  },
 ]
 sequencer.forEach(staff => {
   staff.pos = 0
@@ -55,11 +59,6 @@ const ac = new AudioContext()
 let mouseX
 let mouseY
 
-const bandpass = ac.createBiquadFilter()
-bandpass.type = 'bandpass'
-bandpass.Q.value = 10
-bandpass.frequency.value = 50
-
 const analyser = ac.createAnalyser()
 analyser.fftSize = 128
 const fftLength = analyser.frequencyBinCount
@@ -70,12 +69,21 @@ const output = ac.createGain()
 output.gain.value = 0.5
 
 const NOISE_LENGTH = 44100
-
-const buffer = ac.createBuffer(2, NOISE_LENGTH, 44100)
-for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-  const channelData = buffer.getChannelData(channel)
-  for (let i = 0; i < buffer.length; i++) {
+const noiseBuffer = ac.createBuffer(2, NOISE_LENGTH, 44100)
+for (let channel = 0; channel < noiseBuffer.numberOfChannels; channel++) {
+  const channelData = noiseBuffer.getChannelData(channel)
+  for (let i = 0; i < noiseBuffer.length; i++) {
     channelData[i] = Math.random() * 2 - 1
+  }
+}
+
+const SAW_LENGTH = 44100
+const sawBuffer = ac.createBuffer(1, SAW_LENGTH, 44100)
+for (let channel = 0; channel < sawBuffer.numberOfChannels; channel++) {
+  const channelData = sawBuffer.getChannelData(channel)
+  for (let i = 0; i < sawBuffer.length; i++) {
+    channelData[i] = (((i * 1) % sawBuffer.length) / sawBuffer.length) * 2 - 1
+    channelData[i] = i / sawBuffer.length
   }
 }
 
@@ -97,7 +105,8 @@ function disconnect(nodes, atTime) {
 
 function playCurvedNoise(volume, startFreq, endFreq, duration, q=10) {
   const source = ac.createBufferSource()
-  source.buffer = buffer
+  source.buffer = noiseBuffer
+  source.loop = true
   const bandpass = getBandpass(startFreq, endFreq, duration, q)
   const envelope = ac.createGain()
   const endTime = ac.currentTime + duration
@@ -119,6 +128,28 @@ function getEnvelope(volume, duration, attack, decay, sustain, release) {
   envelope.gain.linearRampToValueAtTime(volume * sustain, ac.currentTime + attack + decay + duration)
   envelope.gain.linearRampToValueAtTime(0, ac.currentTime + attack + decay + duration + release)
   return envelope
+}
+
+function playSaw(volume, startFreq, endFreq, duration, attack, decay, sustain, release, q=10) {
+  const source = ac.createBufferSource()
+  source.buffer = sawBuffer
+  source.loop = true
+
+  const filterFreq = (-Math.sin(-sequencerPos * Math.PI / 16)) * 140 + startFreq
+  const filter = getBandpass(startFreq * 2+ filterFreq, filterFreq, attack + decay + duration + release, 10)
+
+  const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
+  const endTime = ac.currentTime + attack + decay + duration + release
+
+  source.playbackRate.setValueAtTime(startFreq, ac.currentTime)
+  source.playbackRate.linearRampToValueAtTime(endFreq, endTime)
+
+  source.connect(filter)
+  filter.connect(envelope)
+  //source.connect(envelope)
+  envelope.connect(output)
+  disconnect([source, envelope], endTime)
+  source.start()
 }
 
 function playTone(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
@@ -286,6 +317,9 @@ function run() {
   ctx.font = FONT_SIZE + 'px Times New Roman'
   ctx.textBaseline = 'top'
   ctx.textAlign = 'center'
+//  const reverb = getReverb(5.0)
+//  output.connect(reverb)
+//  reverb.connect(analyser)
   output.connect(analyser)
   analyser.connect(ac.destination)
 
@@ -330,8 +364,10 @@ function playSequencer() {
       if (Number.isInteger(note)) {
         const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
         const freq = getNoteFrequency(73, transposedNote)
-        playBass(2.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
-        playBass(1.3, freq/2, freq/2, 0.1, 0.02, 0.02, 0.4, 0.1)
+//        playBass(2.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+//        playBass(1.3, freq/2, freq/2, 0.1, 0.02, 0.02, 0.4, 0.1)
+        playSaw(2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
+//        playSaw(0.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
       } else switch(note) {
         case 'a':
           playCurvedNoise(10, 150, 30, 0.14)
@@ -346,6 +382,13 @@ function playSequencer() {
         case 'y':
           playCurvedNoise(1, 8000, 7500, 0.3)
           break
+        case 'i':
+          playCurvedNoise(0.5, 2500, 2500, 0.5)
+          playCurvedNoise(1, 5000, 5000, 0.5)
+          playCurvedNoise(1, 10000, 10000, 0.5)
+          playCurvedNoise(2, 15000, 15000, 0.5)
+          break
+
       }
     }
   })
@@ -428,6 +471,9 @@ document.onkeydown = function (e) {
       break
     case '4':
       sequencer[4].on = !sequencer[4].on
+      break
+    case '5':
+      sequencer[5].on = !sequencer[5].on
       break
   }
 }
