@@ -1,6 +1,5 @@
 let canvas, ctx
 let animationHandle = null
-const FONT_SIZE = 32
 
 const sequencer = [
   {
@@ -45,7 +44,7 @@ const sequencer = [
   },
   {
     step: 32,
-    notes: ['Hello World!', 'This is', 'WAA!', 'by Schwartz', 'Greetings to #demoscene', 'Technique:', 'Canvas API', 'Web Audio API']
+    notes: ['Hello World!', 'This is', 'WAA!', 'by Schwartz', 'Greetings to #demoscene']
   }
 ]
 sequencer.forEach(staff => {
@@ -55,7 +54,7 @@ sequencer.forEach(staff => {
 let sequencerPos = 0
 let sequencerOn = false
 
-let text = 'press <space>'
+let text = 'Enter Full Screen, Reload page, and press <space> to start'
 let textX = 0
 let textY = 0
 let textStyle = 'black'
@@ -78,7 +77,7 @@ const EFFECT_MOVE  = 0b0000100
 const EFFECT_FREQ  = 0b0001000
 const EFFECT_WAVE  = 0b0010000
 const EFFECT_TEXT  = 0b0100000
-let effects = /* EFFECT_CLEAR | */ EFFECT_MOVE | EFFECT_FREQ/* | EFFECT_WAVE*/ | EFFECT_TEXT
+let effects = /* EFFECT_CLEAR | */ EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE | EFFECT_TEXT
 
 const ac = new AudioContext()
 
@@ -296,7 +295,6 @@ function updateAnimation() {
   direction = direction + fft[fftLength / 2] / 100
 
   if (effects & EFFECT_TEXT)  {
-    ctx.font = "100px Georgia";
     ctx.fillStyle = textStyle
     ctx.textBaseline = 'middle';
     ctx.fillText(text, textX, textY)
@@ -343,7 +341,6 @@ function updateAnimation() {
   }
 
   if (effects & EFFECT_TEXT)  {
-    ctx.font = "100px Georgia";
     textStyle = getGradient(
       0,
       0,
@@ -351,8 +348,8 @@ function updateAnimation() {
       canvas.height,
       getHsl(sequencerPos, 100, 40),
       getHsl(sequencerPos, 100, 40))
-    textX = halfX + fft[10]*halfY/256/4
-    textY = halfY + fft[1]*halfY/256/4
+    textX = halfX + fft[10]*halfY/256/2
+    textY = halfY + fft[1]*halfY/256/2
     ctx.fillStyle = 'white'
     ctx.fillText(text, textX, textY)
     ctx.fillText(text, canvas.width - textX, canvas.height - textY)
@@ -367,7 +364,7 @@ function run() {
   canvas.height = window.innerHeight
 
   ctx = canvas.getContext('2d')
-  ctx.font = FONT_SIZE + 'px Times New Roman'
+  ctx.font = "40px Georgia";
   ctx.textBaseline = 'top'
   ctx.textAlign = 'center'
 //  const reverb = getReverb(5.0)
@@ -382,7 +379,7 @@ function run() {
 function toggleAnimation() {
   if (animationHandle) {
     window.cancelAnimationFrame(animationHandle)
-    ctx.fillText('Paused', Math.floor(canvas.width / 2), 100)
+    ctx.fillText('Visuals paused', Math.floor(canvas.width / 2), Math.floor(canvas.height / 2))
     animationHandle = null
   } else {
     animationHandle = window.requestAnimationFrame(updateAnimation)
@@ -428,6 +425,7 @@ function playSequencer() {
       } else if (note.length > 1) {
         console.log('text=', note)
         text = note
+        ctx.font = "100px Georgia";
       } else {
         switch(note) {
           case 'a':
@@ -535,6 +533,12 @@ document.onkeydown = function (e) {
       break
     case '5':
       sequencer[5].on = !sequencer[5].on
+      break
+    case '6':
+      sequencer[6].on = !sequencer[6].on
+      sequencer[7].on = !sequencer[7].on
+      sequencer[8].on = !sequencer[8].on
+      sequencer[9].on = !sequencer[9].on
       break
   }
 }
