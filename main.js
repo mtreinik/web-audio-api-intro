@@ -27,13 +27,38 @@ const sequencer = [
     step: 4,
     notes: ['', 'i'],
   },
+  {
+    step: 8,
+    notes: [0, -2, 0, '']
+  },
+  {
+    step: 8,
+    notes: [7, 5, 7, '']
+  },
+  {
+    step: 8,
+    notes: [10, 12, 10, '']
+  },
+  {
+    step: 8,
+    notes: [17, 15, 17, '']
+  },
+  {
+    step: 32,
+    notes: ['Hello World!', 'This is', 'WAA!', 'by Schwartz', 'Greetings to #demoscene', 'Technique:', 'Canvas API', 'Web Audio API']
+  }
 ]
 sequencer.forEach(staff => {
   staff.pos = 0
-  staff.on = false
+  staff.on = true
 })
 let sequencerPos = 0
 let sequencerOn = false
+
+let text = 'press <space>'
+let textX = 0
+let textY = 0
+let textStyle = 'black'
 
 const chords = [
   [0, 7, 10, 15],
@@ -49,10 +74,11 @@ let chordNum = 0
 let direction = 0
 
 const EFFECT_CLEAR = 0b0000010
-const EFFECT_MOVE = 0b0000100
-const EFFECT_FREQ = 0b0001000
-const EFFECT_WAVE = 0b0010000
-let effects = EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE
+const EFFECT_MOVE  = 0b0000100
+const EFFECT_FREQ  = 0b0001000
+const EFFECT_WAVE  = 0b0010000
+const EFFECT_TEXT  = 0b0100000
+let effects = /* EFFECT_CLEAR | */ EFFECT_MOVE | EFFECT_FREQ/* | EFFECT_WAVE*/ | EFFECT_TEXT
 
 const ac = new AudioContext()
 
@@ -98,7 +124,6 @@ function getBandpass(startFreq, endFreq, duration, q=10) {
 
 function disconnect(nodes, atTime) {
   setTimeout(() => {
-    console.log('disconnecting')
     nodes.forEach((node) => node.disconnect())
   }, 1000 * (atTime - ac.currentTime))
 }
@@ -231,6 +256,13 @@ function getHsl(r, g, b) {
   return `hsl(${r},${g}%,${b}%)`
 }
 
+function getGradient(x1, y1, x2, y2, color1, color2) {
+  const gradient = ctx.createLinearGradient(x1, x2, x2, y2)
+  gradient.addColorStop(0, color1)
+  gradient.addColorStop(1, color2)
+  return gradient
+}
+
 function updateAnimation() {
   if (effects & EFFECT_CLEAR) {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -240,10 +272,7 @@ function updateAnimation() {
     const rotatedAngle = angle + ac.currentTime
     const x = Math.sin(rotatedAngle)*val + halfX
     const y = Math.cos(rotatedAngle)*val + halfY
-    const gradient = ctx.createLinearGradient(halfX, halfY, x, y)
-
-    gradient.addColorStop(0, color1)
-    gradient.addColorStop(1, color2)
+    const gradient = getGradient(halfX, halfY, x, y, color1, color2)
     ctx.strokeStyle = gradient
     ctx.beginPath()
     ctx.moveTo(halfX, halfY)
@@ -252,9 +281,7 @@ function updateAnimation() {
   }
 
   function drawWave(x1, y1, x2, y2, color1, color2) {
-    const gradient = ctx.createLinearGradient(x1, y1, x2, y2)
-    gradient.addColorStop(0, color1)
-    gradient.addColorStop(1, color2)
+    const gradient = getGradient(x1, y1, x2, y2, color1, color2)
     ctx.strokeStyle = gradient
     ctx.lineTo(x2, y2)
 
@@ -266,10 +293,20 @@ function updateAnimation() {
   analyser.getByteFrequencyData(fft);
   analyser.getByteTimeDomainData(wave)
 
+  direction = direction + fft[fftLength / 2] / 100
+
+  if (effects & EFFECT_TEXT)  {
+    ctx.font = "100px Georgia";
+    ctx.fillStyle = textStyle
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, textX, textY)
+    ctx.fillText(text, canvas.width - textX, canvas.height - textY)
+  }
+
+
   if (effects & EFFECT_MOVE) {
     const imageData = ctx.getImageData(2, 2, canvas.width-4, canvas.height-4)
     const strength = fft[0] / 10
-    direction = direction + fft[fftLength / 2] / 100
     ctx.putImageData(imageData, Math.round(strength*Math.sin(direction))+2, Math.round(strength*Math.cos(direction))+2)
   }
 
@@ -303,6 +340,22 @@ function updateAnimation() {
       drawWave(i * canvas.width / fftLength, halfY, i * canvas.width / fftLength, val, color1, color2)
     }
     ctx.stroke()
+  }
+
+  if (effects & EFFECT_TEXT)  {
+    ctx.font = "100px Georgia";
+    textStyle = getGradient(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+      getHsl(sequencerPos, 100, 40),
+      getHsl(sequencerPos, 100, 40))
+    textX = halfX + fft[10]*halfY/256/4
+    textY = halfY + fft[1]*halfY/256/4
+    ctx.fillStyle = 'white'
+    ctx.fillText(text, textX, textY)
+    ctx.fillText(text, canvas.width - textX, canvas.height - textY)
   }
 
   animationHandle = window.requestAnimationFrame(updateAnimation)
@@ -346,49 +399,57 @@ function getNoteFrequency(frequency, note) {
 }
 
 function playChord(frequency, notes) {
-  console.log('playChord', frequency, notes)
+  // console.log('playChord', frequency, notes)
   notes.forEach(note => {
-    freq = getNoteFrequency(freqency, note)
-    console.log('freq', freq)
+    freq = getNoteFrequency(frequency, note)
     playOrgan(0.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
     //playCurvedNoise(200, freq, freq, 0.5, 1000)
   })
 }
 
 function playSequencer() {
-  sequencer.forEach(staff => {
+  sequencer.forEach((staff, staffNum) => {
     if (staff.on && (sequencerPos % staff.step) === 0) {
       const pos = (sequencerPos / staff.step) % staff.notes.length
       const note = staff.notes[pos]
-      console.log(pos, note)
+      // console.log(pos, note)
       if (Number.isInteger(note)) {
         const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
         const freq = getNoteFrequency(73, transposedNote)
 //        playBass(2.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
 //        playBass(1.3, freq/2, freq/2, 0.1, 0.02, 0.02, 0.4, 0.1)
-        playSaw(2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
+        if (staffNum > 5) {
+          playOrgan(0.5, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+        } else {
+          playSaw(2.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
+          playSaw(2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
+        }
 //        playSaw(0.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
-      } else switch(note) {
-        case 'a':
-          playCurvedNoise(10, 150, 30, 0.14)
-          playTone(1, 35, 35, 0, 0.02, 0, 1, 0.2)
-          break
-        case 'r':
-          playCurvedNoise(1, 8000, 7500, 0.1)
-          break
-        case 's':
-          playCurvedNoise(10, 350, 70, 0.18)
-          break
-        case 'y':
-          playCurvedNoise(1, 8000, 7500, 0.3)
-          break
-        case 'i':
-          playCurvedNoise(0.5, 2500, 2500, 0.5)
-          playCurvedNoise(1, 5000, 5000, 0.5)
-          playCurvedNoise(1, 10000, 10000, 0.5)
-          playCurvedNoise(2, 15000, 15000, 0.5)
-          break
-
+      } else if (note.length > 1) {
+        console.log('text=', note)
+        text = note
+      } else {
+        switch(note) {
+          case 'a':
+            playCurvedNoise(10, 150, 30, 0.14)
+            playTone(1, 35, 35, 0, 0.02, 0, 1, 0.2)
+            break
+          case 'r':
+            playCurvedNoise(1, 8000, 7500, 0.1)
+            break
+          case 's':
+            playCurvedNoise(10, 350, 70, 0.18)
+            break
+          case 'y':
+            playCurvedNoise(1, 8000, 7500, 0.3)
+            break
+          case 'i':
+            playCurvedNoise(0.5, 2500, 2500, 0.5)
+            playCurvedNoise(1, 5000, 5000, 0.5)
+            playCurvedNoise(1, 10000, 10000, 0.5)
+            playCurvedNoise(2, 15000, 15000, 0.5)
+            break
+        }
       }
     }
   })
