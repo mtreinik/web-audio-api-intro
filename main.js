@@ -2,24 +2,55 @@ let canvas, ctx
 let animationHandle = null
 const FONT_SIZE = 32
 
-const len = 32
-const real = new Float32Array(len)
-const imag = new Float32Array(len)
-const ac = new AudioContext()
-const osc = ac.createOscillator()
+const sequencer = [
+  {
+    step: 1,
+    notes: [0, 12, 12, 0, 12, 12, 0, 12, 13, 1, 13, -2, 10, 12, 0, 12],
+  },
+  {
+    step: 2,
+    notes: ['', 'r'],
+  },
+  {
+    step: 2,
+    notes: ['a', ''],
+  },
+  {
+    step: 4,
+    notes: ['', 's'],
+  },
+  {
+    step: 1,
+    notes: ['r', 'r', '', 'r', 'y', 'r', '', 'r']
+  }
+]
+sequencer.forEach(staff => {
+  staff.pos = 0
+  staff.on = false
+})
+let sequencerPos = 0
+let sequencerOn = false
 
-for (let i = 0; i < len; i++) {
-  real[i] = 0
-  imag[i] = 0
-}
-pos = 0
-real[1] = 1
-real[2] = 0.5
-real[3] = 0.4
-real[12] = 1
-const wave = ac.createPeriodicWave(real, imag)
-osc.setPeriodicWave(wave)
-osc.frequency.value = 40
+const chords = [
+  [0, 7, 10, 15],
+  [0, 6, 9, 14],
+  [-2, 7, 9, 14],
+  [-2, 5, 9, 14],
+  [-3, 7, 9, 12],
+  [-3, 6, 10, 12],
+  [-5, 5, 10, 14],
+  [-2, 5, 9, 14],
+]
+let chordNum = 0
+let direction = 0
+
+const EFFECT_CLEAR = 0b0000010
+const EFFECT_MOVE = 0b0000100
+const EFFECT_FREQ = 0b0001000
+const EFFECT_WAVE = 0b0010000
+let effects = EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE
+
+const ac = new AudioContext()
 
 let mouseX
 let mouseY
@@ -28,6 +59,12 @@ const bandpass = ac.createBiquadFilter()
 bandpass.type = 'bandpass'
 bandpass.Q.value = 10
 bandpass.frequency.value = 50
+
+const analyser = ac.createAnalyser()
+analyser.fftSize = 128
+const fftLength = analyser.frequencyBinCount
+let fft = new Uint8Array(fftLength)
+let wave = new Uint8Array(fftLength)
 
 const output = ac.createGain()
 output.gain.value = 0.5
@@ -42,22 +79,19 @@ for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
   }
 }
 
-function playNoise() {
-  const source = ac.createBufferSource()
-  source.buffer = buffer
-  source.connect(bandpass)
-  source.start()
-}
-
-
-function playCurvedNoise(volume, startFreq, endFreq, duration) {
-  const source = ac.createBufferSource()
-  source.buffer = buffer
+function getBandpass(startFreq, endFreq, duration, q=10) {
   const bandpass = ac.createBiquadFilter()
   bandpass.type = 'bandpass'
-  bandpass.Q.value = 10
+  bandpass.Q.value = q
   bandpass.frequency.value = startFreq
   bandpass.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + duration)
+  return bandpass
+}
+
+function playCurvedNoise(volume, startFreq, endFreq, duration, q=10) {
+  const source = ac.createBufferSource()
+  source.buffer = buffer
+  const bandpass = getBandpass(startFreq, endFreq, duration, q)
   const envelope = ac.createGain()
   envelope.gain.setValueAtTime(volume, ac.currentTime)
   envelope.gain.linearRampToValueAtTime(0, ac.currentTime + duration)
@@ -91,8 +125,21 @@ function playTone(volume, startFreq, endFreq, duration, attack, decay, sustain, 
   osc.start()
 }
 
+function playOrgan(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
+  const osc = ac.createOscillator()
+  const wave = ac.createPeriodicWave([0, 1, 0.1, 0.55], [0, 0, 0, 0])
+  osc.setPeriodicWave(wave)
+  osc.frequency.value = startFreq
+  osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
+
+  const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
+  osc.connect(envelope)
+  envelope.connect(output)
+  osc.start()
+}
+
 function getReverb(duration) {
-  const SAMPLE_RATE = 48000
+  const SAMPLE_RATE = 44100
   const convolver = ac.createConvolver()
 
   const buffer = ac.createBuffer(2, duration*SAMPLE_RATE, SAMPLE_RATE)
@@ -110,7 +157,7 @@ function getReverb(duration) {
 function getDistortion() {
   const distortion = ac.createWaveShaper()
   let curve = new Float32Array(3)
-  const values = [-1, -.5, 1]
+  const values = [-1, -.2, 0, .9, 1]
   values.forEach((val, index) => curve[index] = val)
   distortion.curve = curve
   distortion.oversample = '2x'
@@ -119,23 +166,30 @@ function getDistortion() {
 
 function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
-  const wave = ac.createPeriodicWave([0, 1], [0, 0])
+  const wave = ac.createPeriodicWave([0, 1, 1], [0, 0, 0])
   osc.setPeriodicWave(wave)
   osc.frequency.value = startFreq
-  osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
+  //osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
 
   const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
-  osc.connect(envelope)
-
   const distortion = getDistortion()
-  envelope.connect(distortion)
-  distortion.connect(output)
+
+  osc.connect(distortion)
+  distortion.connect(envelope)
+  envelope.connect(output)
 
   osc.start()
 }
 
+function getHsl(r, g, b) {
+  return `hsl(${r},${g}%,${b}%)`
+}
+
 function updateAnimation() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  if (effects & EFFECT_CLEAR) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
 //  console.log('updateAnimation')
 
 //   for (let i = 0; i < len; i++) {
@@ -155,6 +209,80 @@ function updateAnimation() {
 //
 //   console.log('freq', osc.frequency.value)
 
+
+  function drawBar(val, angle, color1, color2) {
+    const rotatedAngle = angle + ac.currentTime
+    const x = Math.sin(rotatedAngle)*val + halfX
+    const y = Math.cos(rotatedAngle)*val + halfY
+    //ctx.fillRect(x, y, 10, 10)
+    const gradient = ctx.createLinearGradient(halfX, halfY, x, y)
+    //console.log(color1)
+    //console.log(color2)
+
+    gradient.addColorStop(0, color1)
+    gradient.addColorStop(1, color2)
+    ctx.strokeStyle = gradient
+    ctx.beginPath()
+    ctx.moveTo(halfX, halfY)
+    ctx.lineTo(x, y)
+    ctx.stroke()
+  }
+
+  function drawWave(x1, y1, x2, y2, color1, color2) {
+    const gradient = ctx.createLinearGradient(x1, y1, x2, y2)
+    gradient.addColorStop(0, color1)
+    gradient.addColorStop(1, color2)
+    ctx.strokeStyle = gradient
+    //ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+
+  }
+
+  const halfX = canvas.width / 2
+  const halfY = canvas.height / 2
+
+  analyser.getByteFrequencyData(fft);
+  analyser.getByteTimeDomainData(wave)
+
+  if (effects & EFFECT_MOVE) {
+    const imageData = ctx.getImageData(2, 2, canvas.width-4, canvas.height-4)
+    const strength = fft[0] / 10
+    direction = direction + fft[fftLength / 2] / 100
+    ctx.putImageData(imageData, Math.round(strength*Math.sin(direction))+2, Math.round(strength*Math.cos(direction))+2)
+  }
+
+  if (effects & EFFECT_FREQ) {
+    ctx.lineWidth = 10
+    ctx.lineCap = 'round'
+    for (let i = 0; i < fftLength/2; i++) {
+      const val = fft[i+3]*halfX / 256
+      const r = fft[0]+1
+      const g = fft[fftLength/2]+1
+      const b = fft[fftLength-1]+1
+
+      color1 = getHsl(i*360/fftLength + direction, val, 0)
+      color2 = getHsl(i*360/fftLength + direction, val, 50)
+      drawBar(val, i * Math.PI * 2/ fftLength, color1, color2)
+      drawBar(val, -i * Math.PI * 2/ fftLength, color1, color2)
+    }
+  }
+
+  if (effects & EFFECT_WAVE) {
+    const width = canvas.width / fftLength
+    ctx.beginPath()
+    ctx.lineWidth = 5
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(0, halfY)
+    for (let i = 0; i < fftLength; i++) {
+      const val = wave[i] * canvas.height / 256
+      color1 = getHsl(i*360/fftLength + direction, 100, 100)
+      color2 = getHsl(i*360/fftLength + direction, 100, 50)
+      drawWave(i * canvas.width / fftLength, halfY, i * canvas.width / fftLength, val, color1, color2)
+    }
+    ctx.stroke()
+  }
+
   animationHandle = window.requestAnimationFrame(updateAnimation)
 }
 
@@ -167,20 +295,20 @@ function run() {
   ctx.font = FONT_SIZE + 'px Times New Roman'
   ctx.textBaseline = 'top'
   ctx.textAlign = 'center'
-
-  output.connect(ac.destination)
+  output.connect(analyser)
+  analyser.connect(ac.destination)
 
   animationHandle = window.requestAnimationFrame(updateAnimation)
 }
 
 function toggleAnimation() {
   if (animationHandle) {
-    output.disconnect(ac.destination)
+    //output.disconnect(ac.destination)
     window.cancelAnimationFrame(animationHandle)
     ctx.fillText('Paused', Math.floor(canvas.width / 2), 100)
     animationHandle = null
   } else {
-    output.connect(ac.destination)
+    //output.connect(ac.destination)
     animationHandle = window.requestAnimationFrame(updateAnimation)
   }
 }
@@ -188,18 +316,63 @@ function toggleAnimation() {
 function playTom(startFreq, endFreq) {
   playCurvedNoise(2, startFreq*2, endFreq*2, 0.1)
   playTone(1, startFreq, endFreq, 0, 0.02, 0, 1, 0.2)
+}
 
+function getNoteFrequency(frequency, note) {
+  return frequency * Math.pow(Math.pow(2, 1/12), note)
+}
+
+function playChord(frequency, notes) {
+  console.log('playChord', frequency, notes)
+  notes.forEach(note => {
+    freq = getNoteFrequency(freqency, note)
+    console.log('freq', freq)
+    playOrgan(0.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+    //playCurvedNoise(200, freq, freq, 0.5, 1000)
+  })
+}
+
+function playSequencer() {
+  sequencer.forEach(staff => {
+    if (staff.on && (sequencerPos % staff.step) === 0) {
+      const pos = (sequencerPos / staff.step) % staff.notes.length
+      const note = staff.notes[pos]
+      console.log(pos, note)
+      if (Number.isInteger(note)) {
+        const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
+        const freq = getNoteFrequency(73, transposedNote)
+        playBass(2.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+        playBass(1.3, freq/2, freq/2, 0.1, 0.02, 0.02, 0.4, 0.1)
+      } else switch(note) {
+        case 'a':
+          playCurvedNoise(10, 150, 30, 0.14)
+          playTone(1, 35, 35, 0, 0.02, 0, 1, 0.2)
+          break
+        case 'r':
+          playCurvedNoise(1, 8000, 7500, 0.1)
+          break
+        case 's':
+          playCurvedNoise(10, 350, 70, 0.18)
+          break
+        case 'y':
+          playCurvedNoise(1, 8000, 7500, 0.3)
+          break
+      }
+    }
+  })
+  sequencerPos++
+  if (sequencerOn) {
+    setTimeout(playSequencer, 100)
+  }
 }
 
 document.onkeydown = function (e) {
   console.log('e.key', e.key)
   switch (e.key) {
     case ' ':
-      output.connect(ac.destination)
-      osc.start()
-      break
-    case 'n':
-      playNoise()
+      sequencerPos = 0
+      sequencerOn = !sequencerOn
+      playSequencer()
       break
     case 'a':
       playCurvedNoise(10, 150, 30, 0.14)
@@ -238,20 +411,40 @@ document.onkeydown = function (e) {
       break
     case 'q':
       //playCurvedNoise(10, 35, 35, 0.02)
-      playBass(1, 170, 170, 0.356, 0.03, 0.03, .7, 0.05)
+      playBass(1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
       break
     case 'p':
       toggleAnimation()
       break
-    case 'Enter':
-      output.frequency.value = 600-osc.frequency.value
+    case 'u':
+      //playChord(220, [0, 7, 16, 21, 26])
+      playChord(220, chords[chordNum])
+      chordNum = (chordNum + 1) % chords.length
+      break
+    case 'o':
+      playChord(220, [0, 5, 9, 16, 21] )
+      break
+    case 'm':
+      playChord(220, [0, 4, 9, 16, 21] )
+      break
+    case '0':
+      sequencer[0].on = !sequencer[0].on
+      break
+    case '1':
+      sequencer[1].on = !sequencer[1].on
+      break
+    case '2':
+      sequencer[2].on = !sequencer[2].on
+      break
+    case '3':
+      sequencer[3].on = !sequencer[3].on
+      break
+    case '4':
+      sequencer[4].on = !sequencer[4].on
       break
   }
 }
 
 window.addEventListener('load', () => {
   run()
-  document.onmousemove = (event) => {
-    bandpass.frequency.value = event.pageX + 0
-  }
 })
