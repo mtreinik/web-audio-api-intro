@@ -549,6 +549,22 @@ document.onkeydown = function (e) {
       sequencer[7].on = !sequencer[7].on
       sequencer[8].on = !sequencer[8].on
       sequencer[9].on = !sequencer[9].on
+      sequencer[10].on = !sequencer[10].on
+      break
+    case '8':
+      sequencer[11].on = !sequencer[11].on
+      break
+    case 'z':
+      effects ^= EFFECT_CLEAR
+      break
+    case 'x':
+      effects ^= EFFECT_MOVE
+      break
+    case 'c':
+      effects ^= EFFECT_WAVE
+      break
+    case 'v':
+      effects ^= EFFECT_FREQ
       break
   }
 }
