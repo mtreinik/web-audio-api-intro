@@ -162,10 +162,8 @@ function playSaw(volume, startFreq, endFreq, duration, attack, decay, sustain, r
 
   source.frequency.setValueAtTime(startFreq, ac.currentTime)
   source.frequency.linearRampToValueAtTime(endFreq, endTime)
-
   source.connect(filter)
   filter.connect(envelope)
-  //source.connect(envelope)
   envelope.connect(output)
   disconnect([source, envelope], endTime)
   source.start()
@@ -217,26 +215,35 @@ function getReverb(duration) {
   return convolver
 }
 
-function getDistortion() {
-  const distortion = ac.createWaveShaper()
-  let curve = new Float32Array(3)
-  const values = [-1, -.2, 0, .9, 1]
-  values.forEach((val, index) => curve[index] = val)
-  distortion.curve = curve
-  distortion.oversample = '2x'
-  return distortion
+/*
+function makeDistortionCurve(amount) {
+  const n_samples = 44100
+  const curve = new Float32Array(n_samples)
+  const deg = Math.PI / 180
+  for (let i = 0 ; i < n_samples; ++i ) {
+    const x = i * 2 / n_samples - 1
+    curve[i] = ( 3 + amount ) * x * 20 * deg / ( Math.PI + amount * Math.abs(x) )
+  }
+  return curve
 }
 
+function getDistortion(amount) {
+  const distortion = ac.createWaveShaper()
+  distortion.curve = makeDistortionCurve(amount)
+  return distortion
+}
+*/
+
+/*
 function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1, 1], [0, 0, 0])
   const endTime = ac.currentTime + attack + decay + duration + release
   osc.setPeriodicWave(wave)
   osc.frequency.value = startFreq
-  //osc.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + attack + decay + duration + release)
 
   const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
-  const distortion = getDistortion()
+  //const distortion = getDistortion(160)
 
   osc.connect(distortion)
   distortion.connect(envelope)
@@ -245,6 +252,7 @@ function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, 
 
   osc.start()
 }
+*/
 
 function getHsl(r, g, b) {
   return `hsl(${r},${g}%,${b}%)`
@@ -414,7 +422,7 @@ function playSequencer() {
             playCurvedNoise(2.5, f, f*6, 2, 20)
             break
           default:
-            playOrgan(0.5, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+            playOrgan(0.4, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
             break
         }
       } else if (note.length > 1) {
@@ -494,9 +502,9 @@ document.onkeydown = function (e) {
       playCurvedNoise(1, 10000, 10000, 0.5)
       playCurvedNoise(2, 15000, 15000, 0.5)
       break
-    case 'q':
-      playBass(1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
-      break
+    // case 'q':
+    //   playBass(1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
+    //   break
     case 'p':
       toggleAnimation()
       break
