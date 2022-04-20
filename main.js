@@ -91,7 +91,7 @@ let effects =  EFFECT_CLEAR | /* EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE  | */ E
 const ac = new AudioContext()
 
 const analyser = ac.createAnalyser()
-analyser.fftSize = 128
+analyser.fftSize = 512
 const fftLength = analyser.frequencyBinCount
 let fft = new Uint8Array(fftLength)
 let wave = new Uint8Array(fftLength)
@@ -287,7 +287,7 @@ function updateAnimation() {
   analyser.getByteFrequencyData(fft);
   analyser.getByteTimeDomainData(wave)
 
-  direction = direction + fft[fftLength / 2] / 100
+  direction = direction + fft[Math.floor(fftLength / 4)] / 200
 
   if (effects & EFFECT_TEXT)  {
     ctx.fillStyle = textStyle
