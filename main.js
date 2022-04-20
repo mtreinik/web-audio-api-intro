@@ -116,7 +116,7 @@ const sawBuffer = ac.createBuffer(1, SAW_LENGTH, 44100)
 for (let channel = 0; channel < sawBuffer.numberOfChannels; channel++) {
   const channelData = sawBuffer.getChannelData(channel)
   for (let i = 0; i < sawBuffer.length; i++) {
-    channelData[i] = (((i * 1) % sawBuffer.length) / sawBuffer.length) * 2 - 1
+    channelData[i] = ((i % sawBuffer.length) / sawBuffer.length) * 2 - 1
     channelData[i] = i / sawBuffer.length
   }
 }
@@ -280,8 +280,7 @@ function updateAnimation() {
     const rotatedAngle = angle + ac.currentTime
     const x = Math.sin(rotatedAngle)*val + halfX
     const y = Math.cos(rotatedAngle)*val + halfY
-    const gradient = getGradient(halfX, halfY, x, y, color1, color2)
-    ctx.strokeStyle = gradient
+    ctx.strokeStyle = getGradient(halfX, halfY, x, y, color1, color2)
     ctx.beginPath()
     ctx.moveTo(halfX, halfY)
     ctx.lineTo(x, y)
@@ -322,12 +321,8 @@ function updateAnimation() {
     ctx.lineCap = 'round'
     for (let i = 0; i < fftLength/2; i++) {
       const val = fft[i+3]*halfX / 256
-      const r = fft[0]+1
-      const g = fft[fftLength/2]+1
-      const b = fft[fftLength-1]+1
-
-      color1 = getHsl(i*360/fftLength + direction, val, 0)
-      color2 = getHsl(i*360/fftLength + direction, val, 50)
+      const color1 = getHsl(i*360/fftLength + direction, val, 0)
+      const color2 = getHsl(i*360/fftLength + direction, val, 50)
       drawBar(val, i * Math.PI * 2/ fftLength, color1, color2)
       drawBar(val, -i * Math.PI * 2/ fftLength, color1, color2)
     }
@@ -413,7 +408,7 @@ function playChord(frequency, notes) {
 }
 
 function playSequencer() {
-  sequencer.forEach((staff, staffNum) => {
+  sequencer.forEach((staff) => {
     if (staff.on && (sequencerPos % staff.step) === 0) {
       const pos = (sequencerPos / staff.step) % staff.notes.length
       const note = staff.notes[pos]
