@@ -3,7 +3,12 @@ let animationHandle = null
 
 const sequencer = [
   {
+    step: 32,
+    notes: ['Hello Reaktor!', 'This is', 'WAA!', 'by Schwartz', 'Greetings to #demoscene']
+  },
+  {
     step: 1,
+    instr: 'saw',
     notes: [0, 12, 12, 0, 12, 12, 0, 12, 13, 1, 13, -2, 10, 12, 0, 12],
   },
   {
@@ -43,14 +48,18 @@ const sequencer = [
     notes: [17, 15, 17, '']
   },
   {
-    step: 32,
-    notes: ['Hello World!', 'This is', 'WAA!', 'by Schwartz', 'Greetings to #demoscene']
+    step: 16,
+    instr: 'wind',
+    notes: [24]
   }
 ]
 sequencer.forEach(staff => {
   staff.pos = 0
-  staff.on = true
+  staff.on = false
 })
+sequencer[0].on = true
+sequencer[1].on = true
+
 let sequencerPos = 0
 let sequencerOn = false
 
@@ -77,7 +86,7 @@ const EFFECT_MOVE  = 0b0000100
 const EFFECT_FREQ  = 0b0001000
 const EFFECT_WAVE  = 0b0010000
 const EFFECT_TEXT  = 0b0100000
-let effects = /* EFFECT_CLEAR | */ EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE | EFFECT_TEXT
+let effects =  EFFECT_CLEAR | /* EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE  | */ EFFECT_TEXT
 
 const ac = new AudioContext()
 
@@ -159,8 +168,8 @@ function playSaw(volume, startFreq, endFreq, duration, attack, decay, sustain, r
   source.buffer = sawBuffer
   source.loop = true
 
-  const filterFreq = (-Math.sin(-sequencerPos * Math.PI / 16)) * 140 + startFreq
-  const filter = getBandpass(startFreq * 2+ filterFreq, filterFreq, attack + decay + duration + release, 10)
+  const filterFreq = (-Math.sin(-sequencerPos * Math.PI / 16)) * startFreq + startFreq
+  const filter = getBandpass(startFreq * 2+ filterFreq, filterFreq, attack + decay + duration + release, q)
 
   const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
   const endTime = ac.currentTime + attack + decay + duration + release
@@ -396,7 +405,6 @@ function getNoteFrequency(frequency, note) {
 }
 
 function playChord(frequency, notes) {
-  // console.log('playChord', frequency, notes)
   notes.forEach(note => {
     freq = getNoteFrequency(frequency, note)
     playOrgan(0.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
@@ -409,21 +417,23 @@ function playSequencer() {
     if (staff.on && (sequencerPos % staff.step) === 0) {
       const pos = (sequencerPos / staff.step) % staff.notes.length
       const note = staff.notes[pos]
-      // console.log(pos, note)
       if (Number.isInteger(note)) {
         const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
         const freq = getNoteFrequency(73, transposedNote)
-//        playBass(2.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
-//        playBass(1.3, freq/2, freq/2, 0.1, 0.02, 0.02, 0.4, 0.1)
-        if (staffNum > 5) {
-          playOrgan(0.5, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
-        } else {
-          playSaw(2.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
-          playSaw(2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
+        switch (staff.instr) {
+          case 'saw':
+            playSaw(2.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 10)
+            playSaw(2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 10)
+            break
+          case 'wind':
+            const f = Math.floor(freq)
+            playCurvedNoise(2.5, f, f*6, 2, 20)
+            break
+          default:
+            playOrgan(0.5, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+            break
         }
-//        playSaw(0.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 0.1, 1)
       } else if (note.length > 1) {
-        console.log('text=', note)
         text = note
         ctx.font = "100px Georgia";
       } else {
@@ -442,10 +452,10 @@ function playSequencer() {
             playCurvedNoise(1, 8000, 7500, 0.3)
             break
           case 'i':
-            playCurvedNoise(0.5, 2500, 2500, 0.5)
-            playCurvedNoise(1, 5000, 5000, 0.5)
-            playCurvedNoise(1, 10000, 10000, 0.5)
-            playCurvedNoise(2, 15000, 15000, 0.5)
+            playCurvedNoise(0.25, 2500, 2500, 0.5)
+            playCurvedNoise(0.5, 5000, 5000, 0.5)
+            playCurvedNoise(0.5, 10000, 10000, 0.5)
+            playCurvedNoise(1, 15000, 15000, 0.5)
             break
         }
       }
@@ -536,6 +546,8 @@ document.onkeydown = function (e) {
       break
     case '6':
       sequencer[6].on = !sequencer[6].on
+      break
+    case '7':
       sequencer[7].on = !sequencer[7].on
       sequencer[8].on = !sequencer[8].on
       sequencer[9].on = !sequencer[9].on
