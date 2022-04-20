@@ -265,7 +265,7 @@ function getHsl(r, g, b) {
 }
 
 function getGradient(x1, y1, x2, y2, color1, color2) {
-  const gradient = ctx.createLinearGradient(x1, x2, x2, y2)
+  const gradient = ctx.createLinearGradient(x1, y1, x2, y2)
   gradient.addColorStop(0, color1)
   gradient.addColorStop(1, color2)
   return gradient
