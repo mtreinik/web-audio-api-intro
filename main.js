@@ -287,11 +287,12 @@ function updateAnimation() {
     ctx.stroke()
   }
 
-  function drawWave(x1, y1, x2, y2, color1, color2) {
-    const gradient = getGradient(x1, y1, x2, y2, color1, color2)
-    ctx.strokeStyle = gradient
-    ctx.lineTo(x2, y2)
-
+  function drawWave(x1, y1, x2, y2) {
+    if (x1 === 0) {
+      ctx.moveTo(x2, y2)
+    } else {
+      ctx.lineTo(x2, y2)
+    }
   }
 
   const halfX = canvas.width / 2
@@ -329,18 +330,20 @@ function updateAnimation() {
   }
 
   if (effects & EFFECT_WAVE) {
-    const width = canvas.width / fftLength
+    const width = canvas.width / (fftLength-1)
     ctx.beginPath()
     ctx.lineWidth = 5
     ctx.lineCap = 'round'
     ctx.beginPath()
-    ctx.moveTo(0, halfY)
     for (let i = 0; i < fftLength; i++) {
       const val = wave[i] * canvas.height / 256
-      color1 = getHsl(i*360/fftLength + direction, 100, 100)
-      color2 = getHsl(i*360/fftLength + direction, 100, 50)
-      drawWave(i * canvas.width / fftLength, halfY, i * canvas.width / fftLength, val, color1, color2)
+      const color1 = getHsl(1/5*i*360/fftLength + direction, 100, 50)
+      const color2 = getHsl(1/5*i*360/fftLength + direction, 100, 50)
+      drawWave(i * width, halfY, i * width, val, color1, color2)
     }
+    const color1 = getHsl(direction, 100, 50)
+    const color2 = getHsl(100 + direction, 100, 50)
+    ctx.strokeStyle = getGradient(0, 0, canvas.width, canvas.height, color1, color2)
     ctx.stroke()
   }
 
