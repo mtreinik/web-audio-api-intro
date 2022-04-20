@@ -90,9 +90,6 @@ let effects =  EFFECT_CLEAR | /* EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE  | */ E
 
 const ac = new AudioContext()
 
-let mouseX
-let mouseY
-
 const analyser = ac.createAnalyser()
 analyser.fftSize = 128
 const fftLength = analyser.frequencyBinCount
@@ -108,16 +105,6 @@ for (let channel = 0; channel < noiseBuffer.numberOfChannels; channel++) {
   const channelData = noiseBuffer.getChannelData(channel)
   for (let i = 0; i < noiseBuffer.length; i++) {
     channelData[i] = Math.random() * 2 - 1
-  }
-}
-
-const SAW_LENGTH = 44100
-const sawBuffer = ac.createBuffer(1, SAW_LENGTH, 44100)
-for (let channel = 0; channel < sawBuffer.numberOfChannels; channel++) {
-  const channelData = sawBuffer.getChannelData(channel)
-  for (let i = 0; i < sawBuffer.length; i++) {
-    channelData[i] = ((i % sawBuffer.length) / sawBuffer.length) * 2 - 1
-    channelData[i] = i / sawBuffer.length
   }
 }
 
@@ -164,9 +151,8 @@ function getEnvelope(volume, duration, attack, decay, sustain, release) {
 }
 
 function playSaw(volume, startFreq, endFreq, duration, attack, decay, sustain, release, q=10) {
-  const source = ac.createBufferSource()
-  source.buffer = sawBuffer
-  source.loop = true
+  const source = ac.createOscillator()
+  source.type = 'sawtooth'
 
   const filterFreq = (-Math.sin(-sequencerPos * Math.PI / 16)) * startFreq + startFreq
   const filter = getBandpass(startFreq * 2+ filterFreq, filterFreq, attack + decay + duration + release, q)
@@ -174,8 +160,8 @@ function playSaw(volume, startFreq, endFreq, duration, attack, decay, sustain, r
   const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
   const endTime = ac.currentTime + attack + decay + duration + release
 
-  source.playbackRate.setValueAtTime(startFreq, ac.currentTime)
-  source.playbackRate.linearRampToValueAtTime(endFreq, endTime)
+  source.frequency.setValueAtTime(startFreq, ac.currentTime)
+  source.frequency.linearRampToValueAtTime(endFreq, endTime)
 
   source.connect(filter)
   filter.connect(envelope)
