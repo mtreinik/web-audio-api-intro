@@ -4,7 +4,7 @@ let animationHandle = null
 const sequencer = [
   {
     step: 32,
-    notes: ['Hello Reaktor!', 'This is', 'WAA!', 'by Schwartz', 'Greetings to #demoscene']
+    notes: ['Hello Reaktor!', 'This is', 'WAA!', 'by Schwartz', '4kb intro', 'with JavaScript', 'Greetings to', '#demoscene']
   },
   {
     step: 1,
@@ -63,7 +63,7 @@ sequencer[1].on = true
 let sequencerPos = 0
 let sequencerOn = false
 
-let text = 'Enter Full Screen, Reload page, and press <space> to start'
+let text = 'press <space> to start'
 let textX = 0
 let textY = 0
 let textStyle = 'black'
