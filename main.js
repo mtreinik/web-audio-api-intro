@@ -108,12 +108,12 @@ for (let channel = 0; channel < noiseBuffer.numberOfChannels; channel++) {
   }
 }
 
-function getBandpass(startFreq, endFreq, duration, q=10) {
+function getBandpass(time, startFreq, endFreq, duration, q=10) {
   const bandpass = ac.createBiquadFilter()
   bandpass.type = 'bandpass'
   bandpass.Q.value = q
-  bandpass.frequency.value = startFreq
-  bandpass.frequency.linearRampToValueAtTime(endFreq, ac.currentTime + duration)
+  bandpass.frequency.setValueAtTime(startFreq, time)
+  bandpass.frequency.linearRampToValueAtTime(endFreq, time + duration)
   return bandpass
 }
 
@@ -123,80 +123,80 @@ function disconnect(nodes, atTime) {
   }, 1000 * (atTime - ac.currentTime))
 }
 
-function playCurvedNoise(volume, startFreq, endFreq, duration, q=10) {
+function playCurvedNoise(time, volume, startFreq, endFreq, duration, q=10) {
   const source = ac.createBufferSource()
   source.buffer = noiseBuffer
   source.loop = true
-  const bandpass = getBandpass(startFreq, endFreq, duration, q)
+  const bandpass = getBandpass(time, startFreq, endFreq, duration, q)
   const envelope = ac.createGain()
-  const endTime = ac.currentTime + duration
-  envelope.gain.setValueAtTime(volume, ac.currentTime)
+  const endTime = time + duration
+  envelope.gain.setValueAtTime(volume, time)
   envelope.gain.linearRampToValueAtTime(0, endTime)
 
   source.connect(bandpass)
   bandpass.connect(envelope)
   envelope.connect(output)
   disconnect([source, bandpass, envelope], endTime)
-  source.start()
+  source.start(time)
 }
 
-function getEnvelope(volume, duration, attack, decay, sustain, release) {
+function getEnvelope(time, volume, duration, attack, decay, sustain, release) {
   const envelope = ac.createGain()
-  envelope.gain.value = 0
-  envelope.gain.linearRampToValueAtTime(volume, ac.currentTime + attack)
-  envelope.gain.linearRampToValueAtTime(volume * sustain, ac.currentTime + attack + decay)
-  envelope.gain.linearRampToValueAtTime(volume * sustain, ac.currentTime + attack + decay + duration)
-  envelope.gain.linearRampToValueAtTime(0, ac.currentTime + attack + decay + duration + release)
+  envelope.gain.setValueAtTime(0, time)
+  envelope.gain.linearRampToValueAtTime(volume, time + attack)
+  envelope.gain.linearRampToValueAtTime(volume * sustain, time + attack + decay)
+  envelope.gain.linearRampToValueAtTime(volume * sustain, time + attack + decay + duration)
+  envelope.gain.linearRampToValueAtTime(0, time + attack + decay + duration + release)
   return envelope
 }
 
-function playSaw(volume, startFreq, endFreq, duration, attack, decay, sustain, release, q=10) {
+function playSaw(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release, q=10) {
   const source = ac.createOscillator()
   source.type = 'sawtooth'
 
   const filterFreq = (-Math.sin(-sequencerPos * Math.PI / 16)) * startFreq + startFreq
-  const filter = getBandpass(startFreq * 2+ filterFreq, filterFreq, attack + decay + duration + release, q)
+  const filter = getBandpass(time, startFreq * 2+ filterFreq, filterFreq, attack + decay + duration + release, q)
 
-  const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
-  const endTime = ac.currentTime + attack + decay + duration + release
+  const envelope = getEnvelope(time, volume, duration, attack, decay, sustain, release)
+  const endTime = time + attack + decay + duration + release
 
-  source.frequency.setValueAtTime(startFreq, ac.currentTime)
+  source.frequency.setValueAtTime(startFreq, time)
   source.frequency.linearRampToValueAtTime(endFreq, endTime)
   source.connect(filter)
   filter.connect(envelope)
   envelope.connect(output)
   disconnect([source, envelope], endTime)
-  source.start()
+  source.start(time)
 }
 
-function playTone(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
+function playTone(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1], [0, 0])
-  const endTime = ac.currentTime + attack + decay + duration + release
+  const endTime = time + attack + decay + duration + release
   osc.setPeriodicWave(wave)
-  osc.frequency.value = startFreq
+  osc.frequency.setValueAtTime(startFreq, time)
   osc.frequency.linearRampToValueAtTime(endFreq, endTime)
 
-  const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
+  const envelope = getEnvelope(time, volume, duration, attack, decay, sustain, release)
   osc.connect(envelope)
   envelope.connect(output)
   disconnect([osc, envelope], endTime)
-  osc.start()
+  osc.start(time)
 }
 
-function playOrgan(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
+function playOrgan(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1, 0.1, 0.55], [0, 0, 0, 0])
-  const endTime = ac.currentTime + attack + decay + duration + release
+  const endTime = time + attack + decay + duration + release
   osc.setPeriodicWave(wave)
-  osc.frequency.value = startFreq
+  osc.frequency.setValueAtTime(startFreq, time)
   osc.frequency.linearRampToValueAtTime(endFreq, endTime)
 
-  const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
+  const envelope = getEnvelope(time, volume, duration, attack, decay, sustain, release)
   osc.connect(envelope)
   envelope.connect(output)
   disconnect([osc, envelope], endTime)
-  osc.start()
+  osc.start(time)
 }
 
 function getReverb(duration) {
@@ -235,14 +235,14 @@ function getDistortion(amount) {
 */
 
 /*
-function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
+function playBass(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
   const osc = ac.createOscillator()
   const wave = ac.createPeriodicWave([0, 1, 1], [0, 0, 0])
-  const endTime = ac.currentTime + attack + decay + duration + release
+  const endTime = time + attack + decay + duration + release
   osc.setPeriodicWave(wave)
-  osc.frequency.value = startFreq
+  osc.frequency.setValueAtTime(startFreq, time)
 
-  const envelope = getEnvelope(volume, duration, attack, decay, sustain, release)
+  const envelope = getEnvelope(time, volume, duration, attack, decay, sustain, release)
   //const distortion = getDistortion(160)
 
   osc.connect(distortion)
@@ -250,7 +250,7 @@ function playBass(volume, startFreq, endFreq, duration, attack, decay, sustain, 
   envelope.connect(output)
   disconnect([osc, distortion, envelope], endTime)
 
-  osc.start()
+  osc.start(time)
 }
 */
 
@@ -387,75 +387,86 @@ function toggleAnimation() {
   }
 }
 
-function playTom(startFreq, endFreq) {
-  playCurvedNoise(2, startFreq*2, endFreq*2, 0.1)
-  playTone(1, startFreq, endFreq, 0, 0.02, 0, 1, 0.2)
+function playTom(time, startFreq, endFreq) {
+  playCurvedNoise(time, 2, startFreq*2, endFreq*2, 0.1)
+  playTone(time, 1, startFreq, endFreq, 0, 0.02, 0, 1, 0.2)
 }
 
 function getNoteFrequency(frequency, note) {
   return frequency * Math.pow(Math.pow(2, 1/12), note)
 }
 
-function playChord(frequency, notes) {
+function playChord(time, frequency, notes) {
   notes.forEach(note => {
     freq = getNoteFrequency(frequency, note)
-    playOrgan(0.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+    playOrgan(time, 0.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
     //playCurvedNoise(200, freq, freq, 0.5, 1000)
   })
 }
 
+let sequencerNoteTime = 0
+const scheduleAheadTime = 0.2
+const lookahead = 25
+const beatDuration = 0.1
+let sequencerPreviousNoteTime = 0
+
 function playSequencer() {
-  sequencer.forEach((staff) => {
-    if (staff.on && (sequencerPos % staff.step) === 0) {
-      const pos = (sequencerPos / staff.step) % staff.notes.length
-      const note = staff.notes[pos]
-      if (Number.isInteger(note)) {
-        const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
-        const freq = getNoteFrequency(73, transposedNote)
-        switch (staff.instr) {
-          case 'saw':
-            playSaw(2.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 10)
-            playSaw(2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 10)
-            break
-          case 'wind':
-            const f = Math.floor(freq)
-            playCurvedNoise(2.5, f, f*6, 2, 20)
-            break
-          default:
-            playOrgan(0.4, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
-            break
-        }
-      } else if (note.length > 1) {
-        text = note
-        ctx.font = "100px Georgia";
-      } else {
-        switch(note) {
-          case 'a':
-            playCurvedNoise(10, 150, 30, 0.14)
-            playTone(1, 35, 35, 0, 0.02, 0, 1, 0.2)
-            break
-          case 'r':
-            playCurvedNoise(1, 8000, 7500, 0.1)
-            break
-          case 's':
-            playCurvedNoise(10, 350, 70, 0.18)
-            break
-          case 'y':
-            playCurvedNoise(1, 8000, 7500, 0.3)
-            break
-          case 'i':
-            playCurvedNoise(0.25, 2500, 2500, 0.5)
-            playCurvedNoise(0.5, 5000, 5000, 0.5)
-            playCurvedNoise(0.5, 10000, 10000, 0.5)
-            playCurvedNoise(1, 15000, 15000, 0.5)
-            break
+  while (sequencerNoteTime < ac.currentTime + scheduleAheadTime) {
+    console.log(sequencerNoteTime - sequencerPreviousNoteTime, sequencerNoteTime - ac.currentTime)
+    sequencerPreviousNoteTime = sequencerNoteTime
+    sequencer.forEach((staff) => {
+      if (staff.on && (sequencerPos % staff.step) === 0) {
+        const pos = (sequencerPos / staff.step) % staff.notes.length
+        const note = staff.notes[pos]
+        if (Number.isInteger(note)) {
+          const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
+          const freq = getNoteFrequency(73, transposedNote)
+          switch (staff.instr) {
+            case 'saw':
+              playSaw(sequencerNoteTime, 2.5, freq/2, freq/2, 0.03, 0.05, 0.01, 0.2, 0.3, 10)
+              playSaw(sequencerNoteTime, 2.5, freq, freq, 0.03, 0.05, 0.01, 0.2, 0.3, 10)
+              break
+            case 'wind':
+              const f = Math.floor(freq)
+              playCurvedNoise(sequencerNoteTime, 2.5, f, f*6, 2, 20)
+              break
+            default:
+              playOrgan(sequencerNoteTime, 0.4, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+              break
+          }
+        } else if (note.length > 1) {
+          text = note
+          ctx.font = "100px Georgia";
+        } else {
+          switch(note) {
+            case 'a':
+              playCurvedNoise(sequencerNoteTime, 10, 150, 30, 0.14)
+              playTone(sequencerNoteTime, 1, 35, 35, 0, 0.02, 0, 1, 0.2)
+              break
+            case 'r':
+              playCurvedNoise(sequencerNoteTime, 1, 8000, 7500, 0.1)
+              break
+            case 's':
+              playCurvedNoise(sequencerNoteTime, 10, 350, 70, 0.18)
+              break
+            case 'y':
+              playCurvedNoise(sequencerNoteTime, 1, 8000, 7500, 0.3)
+              break
+            case 'i':
+              playCurvedNoise(sequencerNoteTime, 0.25, 2500, 2500, 0.5)
+              playCurvedNoise(sequencerNoteTime, 0.5, 5000, 5000, 0.5)
+              playCurvedNoise(sequencerNoteTime, 0.5, 10000, 10000, 0.5)
+              playCurvedNoise(sequencerNoteTime, 1, 15000, 15000, 0.5)
+              break
+          }
         }
       }
-    }
-  })
-  sequencerPos++
+    })
+    sequencerPos++
+    sequencerNoteTime += beatDuration
+  }
   if (sequencerOn) {
-    setTimeout(playSequencer, 100)
+    setTimeout(playSequencer, lookahead)
   }
 }
 
@@ -465,58 +476,59 @@ document.onkeydown = function (e) {
     case ' ':
       sequencerPos = 0
       sequencerOn = !sequencerOn
+      sequencerNoteTime = ac.currentTime + beatDuration
       playSequencer()
       break
     case 'a':
-      playCurvedNoise(10, 150, 30, 0.14)
-      playTone(1, 35, 35, 0, 0.02, 0, 1, 0.2)
+      playCurvedNoise(ac.currentTime, 10, 150, 30, 0.14)
+      playTone(ac.currentTime, 1, 35, 35, 0, 0.02, 0, 1, 0.2)
       break
     case 's':
-      playCurvedNoise(10, 350, 70, 0.18)
+      playCurvedNoise(ac.currentTime, 10, 350, 70, 0.18)
       //playCurvedNoise(250, 200, 0.05)
       break
     case 'r':
-      playCurvedNoise(1, 8000, 7500, 0.1)
+      playCurvedNoise(ac.currentTime, 1, 8000, 7500, 0.1)
       break
     case 't':
-      playCurvedNoise(1, 8000, 7500, 0.2)
+      playCurvedNoise(ac.currentTime, 1, 8000, 7500, 0.2)
       break
     case 'y':
-      playCurvedNoise(1, 8000, 7500, 0.3)
+      playCurvedNoise(ac.currentTime, 1, 8000, 7500, 0.3)
       break
     case 'j':
-      playTom(250, 210)
+      playTom(ac.currentTime, 250, 210)
       break
     case 'h':
-      playTom(210, 177)
+      playTom(ac.currentTime, 210, 177)
       break
     case 'g':
-      playTom(177, 149)
+      playTom(ac.currentTime, 177, 149)
       break
     case 'f':
-      playTom(149, 125)
+      playTom(ac.currentTime, 149, 125)
       break
     case 'i':
-      playCurvedNoise(0.5, 2500, 2500, 0.5)
-      playCurvedNoise(1, 5000, 5000, 0.5)
-      playCurvedNoise(1, 10000, 10000, 0.5)
-      playCurvedNoise(2, 15000, 15000, 0.5)
+      playCurvedNoise(ac.currentTime, 0.5, 2500, 2500, 0.5)
+      playCurvedNoise(ac.currentTime, 1, 5000, 5000, 0.5)
+      playCurvedNoise(ac.currentTime, 1, 10000, 10000, 0.5)
+      playCurvedNoise(ac.currentTime, 2, 15000, 15000, 0.5)
       break
     // case 'q':
-    //   playBass(1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
+    //   playBass(ac.currentTime, 1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
     //   break
     case 'p':
       toggleAnimation()
       break
     case 'u':
-      playChord(220, chords[chordNum])
+      playChord(ac.currentTime, 220, chords[chordNum])
       chordNum = (chordNum + 1) % chords.length
       break
     case 'o':
-      playChord(220, [0, 5, 9, 16, 21] )
+      playChord(ac.currentTime, 220, [0, 5, 9, 16, 21] )
       break
     case 'm':
-      playChord(220, [0, 4, 9, 16, 21] )
+      playChord(ac.currentTime, 220, [0, 4, 9, 16, 21] )
       break
     case '0':
       sequencer[0].on = !sequencer[0].on
