@@ -1,10 +1,24 @@
-let canvas, ctx
-let animationHandle = null
+let canvas, ctx, animationHandle = null
+
+const scheduleAheadTime = 0.2
+const lookahead = 25
+const beatDuration = 0.1
+
+const EFFECT_CLEAR = 0b000001000000
+const EFFECT_MOVE  = 0b000010000000
+const EFFECT_FREQ  = 0b000100000000
+const EFFECT_WAVE  = 0b001000000000
+const EFFECT_TEXT  = 0b010000000000
+
+let sequencerPos, sequencerOn, sequencerNoteTime
 
 const sequencer = [
   {
     step: 32,
-    notes: ['Hello Reaktor!', 'This is', 'WAA!', 'by Schwartz', '4kb intro', 'with JavaScript', 'Greetings to', '#demoscene']
+    instr: 'ctrl',
+    notes: [
+      [], [2, EFFECT_MOVE], [3, EFFECT_WAVE], [4, EFFECT_FREQ], [5, EFFECT_CLEAR], [2], [2, 6, 7, 8, 9, 10, 11], [EFFECT_FREQ], [EFFECT_FREQ], [],
+      [], [2], [3, EFFECT_WAVE], [4, EFFECT_FREQ], [5], [2, EFFECT_CLEAR], [2, 6, 7, 8, 9, 10, 11, 'end'] ]
   },
   {
     step: 1,
@@ -51,42 +65,31 @@ const sequencer = [
     step: 16,
     instr: 'wind',
     notes: [24]
-  }
+  },
+  {
+    step: 32,
+    notes: ['Hello Reaktor!', 'This is', 'a 4kb intro', 'made with', 'JavaScript', 'by Schwartz', 'Greetings to', '#demoscene']
+  },
 ]
-sequencer.forEach(staff => {
-  staff.pos = 0
-  staff.on = false
-})
-sequencer[0].on = true
-sequencer[1].on = true
-
-let sequencerPos = 0
-let sequencerOn = false
 
 let text = 'press <space> to start'
-let textX = 0
-let textY = 0
+let textX = 0, textY = 0
 let textStyle = 'black'
-
-const chords = [
-  [0, 7, 10, 15],
-  [0, 6, 9, 14],
-  [-2, 7, 9, 14],
-  [-2, 5, 9, 14],
-  [-3, 7, 9, 12],
-  [-3, 6, 10, 12],
-  [-5, 5, 10, 14],
-  [-2, 5, 9, 14],
-]
-let chordNum = 0
 let direction = 0
+let effects
 
-const EFFECT_CLEAR = 0b0000010
-const EFFECT_MOVE  = 0b0000100
-const EFFECT_FREQ  = 0b0001000
-const EFFECT_WAVE  = 0b0010000
-const EFFECT_TEXT  = 0b0100000
-let effects =  EFFECT_CLEAR | /* EFFECT_MOVE | EFFECT_FREQ | EFFECT_WAVE  | */ EFFECT_TEXT
+function reset() {
+  effects = EFFECT_CLEAR | EFFECT_TEXT
+
+  sequencerPos = 0
+  sequencerOn = false
+  sequencer.forEach(staff => {
+    staff.on = false
+  })
+  sequencer[0].on = true
+  sequencer[1].on = true
+  sequencer[12].on = true
+}
 
 const ac = new AudioContext()
 
@@ -97,7 +100,10 @@ let fft = new Uint8Array(fftLength)
 let wave = new Uint8Array(fftLength)
 
 const output = ac.createGain()
-output.gain.value = 0.5
+output.gain.value = 1
+
+const finalOutput = ac.createGain()
+finalOutput.gain.value = 0.5
 
 const NOISE_LENGTH = 44100
 const noiseBuffer = ac.createBuffer(2, NOISE_LENGTH, 44100)
@@ -164,14 +170,14 @@ function playSaw(time, volume, startFreq, endFreq, duration, attack, decay, sust
   source.frequency.linearRampToValueAtTime(endFreq, endTime)
   source.connect(filter)
   filter.connect(envelope)
-  envelope.connect(output)
+  envelope.connect(finalOutput)
   disconnect([source, envelope], endTime)
   source.start(time)
 }
 
-function playTone(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
+function playTone(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release, real=[0, 1], imag=[0, 0]) {
   const osc = ac.createOscillator()
-  const wave = ac.createPeriodicWave([0, 1], [0, 0])
+  const wave = ac.createPeriodicWave(real, imag)
   const endTime = time + attack + decay + duration + release
   osc.setPeriodicWave(wave)
   osc.frequency.setValueAtTime(startFreq, time)
@@ -183,76 +189,6 @@ function playTone(time, volume, startFreq, endFreq, duration, attack, decay, sus
   disconnect([osc, envelope], endTime)
   osc.start(time)
 }
-
-function playOrgan(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
-  const osc = ac.createOscillator()
-  const wave = ac.createPeriodicWave([0, 1, 0.1, 0.55], [0, 0, 0, 0])
-  const endTime = time + attack + decay + duration + release
-  osc.setPeriodicWave(wave)
-  osc.frequency.setValueAtTime(startFreq, time)
-  osc.frequency.linearRampToValueAtTime(endFreq, endTime)
-
-  const envelope = getEnvelope(time, volume, duration, attack, decay, sustain, release)
-  osc.connect(envelope)
-  envelope.connect(output)
-  disconnect([osc, envelope], endTime)
-  osc.start(time)
-}
-
-function getReverb(duration) {
-  const SAMPLE_RATE = 44100
-  const convolver = ac.createConvolver()
-
-  const buffer = ac.createBuffer(2, duration*SAMPLE_RATE, SAMPLE_RATE)
-  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-    const channelData = buffer.getChannelData(channel)
-    for (let i = 0; i < buffer.length; i++) {
-      channelData[i] = (Math.random() * buffer.length) < (buffer.length / (i+1)) ? Math.random() : 0
-    }
-  }
-
-  convolver.buffer = buffer
-  return convolver
-}
-
-/*
-function makeDistortionCurve(amount) {
-  const n_samples = 44100
-  const curve = new Float32Array(n_samples)
-  const deg = Math.PI / 180
-  for (let i = 0 ; i < n_samples; ++i ) {
-    const x = i * 2 / n_samples - 1
-    curve[i] = ( 3 + amount ) * x * 20 * deg / ( Math.PI + amount * Math.abs(x) )
-  }
-  return curve
-}
-
-function getDistortion(amount) {
-  const distortion = ac.createWaveShaper()
-  distortion.curve = makeDistortionCurve(amount)
-  return distortion
-}
-*/
-
-/*
-function playBass(time, volume, startFreq, endFreq, duration, attack, decay, sustain, release) {
-  const osc = ac.createOscillator()
-  const wave = ac.createPeriodicWave([0, 1, 1], [0, 0, 0])
-  const endTime = time + attack + decay + duration + release
-  osc.setPeriodicWave(wave)
-  osc.frequency.setValueAtTime(startFreq, time)
-
-  const envelope = getEnvelope(time, volume, duration, attack, decay, sustain, release)
-  //const distortion = getDistortion(160)
-
-  osc.connect(distortion)
-  distortion.connect(envelope)
-  envelope.connect(output)
-  disconnect([osc, distortion, envelope], endTime)
-
-  osc.start(time)
-}
-*/
 
 function getHsl(r, g, b) {
   return `hsl(${r},${g}%,${b}%)`
@@ -266,10 +202,6 @@ function getGradient(x1, y1, x2, y2, color1, color2) {
 }
 
 function updateAnimation() {
-  if (effects & EFFECT_CLEAR) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-  }
-
   function drawBar(val, angle, color1, color2) {
     const rotatedAngle = angle + ac.currentTime
     const x = Math.sin(rotatedAngle)*val + halfX
@@ -295,7 +227,12 @@ function updateAnimation() {
   analyser.getByteFrequencyData(fft);
   analyser.getByteTimeDomainData(wave)
 
-  direction = direction + fft[Math.floor(fftLength / 4)] / 200
+  const delta = fft[Math.floor(3)] / 420
+  direction = direction + delta
+
+  if (effects & EFFECT_CLEAR) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
 
   if (effects & EFFECT_TEXT)  {
     ctx.fillStyle = textStyle
@@ -303,7 +240,6 @@ function updateAnimation() {
     ctx.fillText(text, textX, textY)
     ctx.fillText(text, canvas.width - textX, canvas.height - textY)
   }
-
 
   if (effects & EFFECT_MOVE) {
     const imageData = ctx.getImageData(2, 2, canvas.width-4, canvas.height-4)
@@ -349,8 +285,8 @@ function updateAnimation() {
       canvas.height,
       getHsl(sequencerPos, 100, 40),
       getHsl(sequencerPos, 100, 40))
-    textX = halfX + fft[10]*halfY/256/2
-    textY = halfY + fft[1]*halfY/256/2
+    textX = halfX + fft[Math.floor(fftLength/10)]*halfY/256/2
+    textY = halfY + fft[Math.floor(fftLength/20)]*halfY/256/2
     ctx.fillStyle = 'white'
     ctx.fillText(text, textX, textY)
     ctx.fillText(text, canvas.width - textX, canvas.height - textY)
@@ -360,6 +296,7 @@ function updateAnimation() {
 }
 
 function run() {
+  reset()
   canvas = document.getElementById('canvas')
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
@@ -368,11 +305,10 @@ function run() {
   ctx.font = "40px Georgia";
   ctx.textBaseline = 'top'
   ctx.textAlign = 'center'
-//  const reverb = getReverb(5.0)
-//  output.connect(reverb)
-//  reverb.connect(analyser)
+
   output.connect(analyser)
-  analyser.connect(ac.destination)
+  analyser.connect(finalOutput)
+  finalOutput.connect(ac.destination)
 
   animationHandle = window.requestAnimationFrame(updateAnimation)
 }
@@ -396,29 +332,24 @@ function getNoteFrequency(frequency, note) {
   return frequency * Math.pow(Math.pow(2, 1/12), note)
 }
 
-function playChord(time, frequency, notes) {
-  notes.forEach(note => {
-    freq = getNoteFrequency(frequency, note)
-    playOrgan(time, 0.3, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
-    //playCurvedNoise(200, freq, freq, 0.5, 1000)
-  })
-}
-
-let sequencerNoteTime = 0
-const scheduleAheadTime = 0.2
-const lookahead = 25
-const beatDuration = 0.1
-let sequencerPreviousNoteTime = 0
-
 function playSequencer() {
   while (sequencerNoteTime < ac.currentTime + scheduleAheadTime) {
-    console.log(sequencerNoteTime - sequencerPreviousNoteTime, sequencerNoteTime - ac.currentTime)
-    sequencerPreviousNoteTime = sequencerNoteTime
     sequencer.forEach((staff) => {
       if (staff.on && (sequencerPos % staff.step) === 0) {
         const pos = (sequencerPos / staff.step) % staff.notes.length
         const note = staff.notes[pos]
-        if (Number.isInteger(note)) {
+        if (staff.instr === 'ctrl') {
+          note.forEach(ctrl => {
+            if (ctrl >= EFFECT_CLEAR) {
+              effects ^= ctrl
+            } else if (ctrl === 'end') {
+              playCurvedNoise(sequencerNoteTime, 10, 1000, 50, 5, 20)
+              reset()
+            } else {
+              sequencer[ctrl].on = !sequencer[ctrl].on
+            }
+          })
+        } else if (Number.isInteger(note)) {
           const transposedNote = note + ((sequencerPos & 128) ? 2 : 0)
           const freq = getNoteFrequency(73, transposedNote)
           switch (staff.instr) {
@@ -431,7 +362,7 @@ function playSequencer() {
               playCurvedNoise(sequencerNoteTime, 2.5, f, f*6, 2, 20)
               break
             default:
-              playOrgan(sequencerNoteTime, 0.4, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1)
+              playTone(sequencerNoteTime, 0.4, freq, freq, 0.1, 0.02, 0.02, 0.4, 0.1, [0, 1, 0.1, 0.55], [0, 0, 0, 0])
               break
           }
         } else if (note.length > 1) {
@@ -440,8 +371,8 @@ function playSequencer() {
         } else {
           switch(note) {
             case 'a':
-              playCurvedNoise(sequencerNoteTime, 10, 150, 30, 0.14)
-              playTone(sequencerNoteTime, 1, 35, 35, 0, 0.02, 0, 1, 0.2)
+              playCurvedNoise(sequencerNoteTime, 15, 150, 30, 0.14)
+              playTone(sequencerNoteTime, 1.5, 35, 35, 0, 0.02, 0, 1, 0.2)
               break
             case 'r':
               playCurvedNoise(sequencerNoteTime, 1, 8000, 7500, 0.1)
@@ -453,8 +384,8 @@ function playSequencer() {
               playCurvedNoise(sequencerNoteTime, 1, 8000, 7500, 0.3)
               break
             case 'i':
-              playCurvedNoise(sequencerNoteTime, 0.25, 2500, 2500, 0.5)
-              playCurvedNoise(sequencerNoteTime, 0.5, 5000, 5000, 0.5)
+              //playCurvedNoise(sequencerNoteTime, 0.25, 2500, 2500, 0.5)
+              //playCurvedNoise(sequencerNoteTime, 0.5, 5000, 5000, 0.5)
               playCurvedNoise(sequencerNoteTime, 0.5, 10000, 10000, 0.5)
               playCurvedNoise(sequencerNoteTime, 1, 15000, 15000, 0.5)
               break
@@ -471,13 +402,16 @@ function playSequencer() {
 }
 
 document.onkeydown = function (e) {
-  console.log('e.key', e.key)
   switch (e.key) {
     case ' ':
-      sequencerPos = 0
-      sequencerOn = !sequencerOn
-      sequencerNoteTime = ac.currentTime + beatDuration
-      playSequencer()
+      if (sequencerOn) {
+        sequencerOn = false
+      } else {
+        reset()
+        sequencerOn = true
+        sequencerNoteTime = ac.currentTime + beatDuration
+        playSequencer()
+      }
       break
     case 'a':
       playCurvedNoise(ac.currentTime, 10, 150, 30, 0.14)
@@ -485,7 +419,6 @@ document.onkeydown = function (e) {
       break
     case 's':
       playCurvedNoise(ac.currentTime, 10, 350, 70, 0.18)
-      //playCurvedNoise(250, 200, 0.05)
       break
     case 'r':
       playCurvedNoise(ac.currentTime, 1, 8000, 7500, 0.1)
@@ -514,21 +447,11 @@ document.onkeydown = function (e) {
       playCurvedNoise(ac.currentTime, 1, 10000, 10000, 0.5)
       playCurvedNoise(ac.currentTime, 2, 15000, 15000, 0.5)
       break
-    // case 'q':
-    //   playBass(ac.currentTime, 1, 73.4, 73.4, 10.356, 0.1, 0.15, .3, 0.05)
-    //   break
     case 'p':
       toggleAnimation()
       break
     case 'u':
-      playChord(ac.currentTime, 220, chords[chordNum])
-      chordNum = (chordNum + 1) % chords.length
-      break
-    case 'o':
-      playChord(ac.currentTime, 220, [0, 5, 9, 16, 21] )
-      break
-    case 'm':
-      playChord(ac.currentTime, 220, [0, 4, 9, 16, 21] )
+      playCurvedNoise(ac.currentTime, 10, 2000, 50, 5, 20)
       break
     case '0':
       sequencer[0].on = !sequencer[0].on
