@@ -17,8 +17,8 @@ const sequencer = [
     step: 32,
     instr: 'ctrl',
     notes: [
-      [], [2, EFFECT_MOVE], [3, EFFECT_WAVE], [4, EFFECT_FREQ], [5, EFFECT_CLEAR], [2], [2, 6, 7, 8, 9, 10, 11], [EFFECT_FREQ], [EFFECT_FREQ], [],
-      [], [2], [3, EFFECT_WAVE], [4, EFFECT_FREQ], [5], [2, EFFECT_CLEAR], [2, 6, 7, 8, 9, 10, 11, 'end'] ]
+      [], [2, EFFECT_WAVE, EFFECT_MOVE], [3, EFFECT_WAVE], [4, EFFECT_FREQ], [5, EFFECT_CLEAR], [2], [2, 6, 7, 8, 9, 10, 11], [EFFECT_FREQ], [EFFECT_FREQ], [],
+      [], [2], [3, EFFECT_WAVE], [4, EFFECT_FREQ], [5, EFFECT_WAVE], [2, EFFECT_CLEAR], [2, 6, 7, 8, 9, 10, 11, 'end'] ]
   },
   {
     step: 1,
@@ -79,7 +79,7 @@ let direction = 0
 let effects
 
 function reset() {
-  effects = EFFECT_CLEAR | EFFECT_TEXT
+  effects = EFFECT_CLEAR | EFFECT_WAVE | EFFECT_TEXT
 
   sequencerPos = 0
   sequencerOn = false
