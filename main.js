@@ -384,8 +384,6 @@ function playSequencer() {
               playCurvedNoise(sequencerNoteTime, 1, 8000, 7500, 0.3)
               break
             case 'i':
-              //playCurvedNoise(sequencerNoteTime, 0.25, 2500, 2500, 0.5)
-              //playCurvedNoise(sequencerNoteTime, 0.5, 5000, 5000, 0.5)
               playCurvedNoise(sequencerNoteTime, 0.5, 10000, 10000, 0.5)
               playCurvedNoise(sequencerNoteTime, 1, 15000, 15000, 0.5)
               break
