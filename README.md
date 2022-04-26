@@ -6,7 +6,7 @@ Plays synthesized sounds with Web Audio API and draws 2D graphics with Canvas AP
 
 Minified with Terser and compressed with RoadRoller.
 
-Author: Mikko Reinikainen
+Author: Mikko Reinikainen alias Schwartz
 
 ## Resources
 
